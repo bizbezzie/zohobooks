@@ -2,79 +2,113 @@
 
 namespace Bizbezzie\Zohobooks;
 
-use Illuminate\Cache\CacheManager;
-use Illuminate\Contracts\Foundation\Application;
+use Bizbezzie\Zohobooks\Jobs\ApiRequestJob;
+use Bizbezzie\Zohobooks\Models\Zohoauth;
+use DB;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Facades\Socialite;
+use Illuminate\Http\Request;
+use Route;
 
 class Zohobooks
 {
     /**
-     * @return CacheManager|Application|mixed
+     * @return RedirectResponse
      */
-    public function firstToken(): mixed
+    public function firstToken($user_id)
     {
-        return cache('zoho_token')
-            ?? Socialite::driver('zoho')
-                ->scopes(config('zohobooks.scope'))
-                ->with(['access_type' => 'offline', 'response_type' => 'code', 'prompt' => 'consent'])
-                ->stateless()
-                ->redirect();
+        $zoho_user = Zohoauth::whereUserId($user_id)->firstOrFail();
+
+        $redirect_url = config('zohobooks.auth_url') . '?scope=' . config('zohobooks.scope') . '&client_id=' . $zoho_user->client_id . '&state=' . $user_id . '&response_type=code&redirect_uri=' . route('auth.zoho.callback') . '&access_type=offline&prompt=consent';
+
+        return redirect()->away($redirect_url);
     }
 
     /**
-     * @return bool|string
+     * @param Request $request
+     * @return RedirectResponse
      */
-    public function callback(): bool|string
+    public function callback(Request $request)
     {
-        $user = Socialite::driver('zoho')->stateless()->user();
-        cache(['zoho_token' => $user->token]);
-        cache(['zoho_token_expires_in' => now()->addSeconds($user->expiresIn - 10)]);
-        cache(['zoho_refresh_token' => $user->refreshToken]);
+        $zoho_user = Zohoauth::whereUserId($request->state)->first();
 
-        return json_encode([
-            "status"  => true,
-            "message" => "Token Created Successfully.",
-            "data"    => [
-                'zoho_token'            => cache('zoho_token'),
-                'zoho_token_expires_in' => cache('zoho_token_expires_in'),
-                'zoho_refresh_token'    => cache('zoho_refresh_token')
-            ]]);
+        $response = Http::asForm()->post(config('zohobooks.token_url'),
+            [
+                'code'          => $request->code,
+                'client_id'     => $zoho_user->client_id,
+                'client_secret' => $zoho_user->client_secret,
+                'redirect_uri'  => route('auth.zoho.callback'),
+                'grant_type'    => 'authorization_code',
+                'state'         => $zoho_user->user_id,
+                'scope'         => config('zohobooks.scope'),
+            ]
+        );
+
+        Zohoauth::whereUserId($request->state)->update(
+            [
+                'token'            => $response['access_token'],
+                'refresh_token'    => $response['refresh_token'],
+                'token_expires_in' => now()->addSeconds($response['expires_in'] - 10),
+            ]);
+
+        session()->flash('success', "Zoho Auth Tokens Created Successfully.");
+
+        return redirect()->route(config('zohobooks.redirect_route'));
     }
 
     /**
+     * @param $user_id
      * @return string
      */
-    public function getAccessToken(): string
+    public function getAccessToken($user_id): string
     {
-        if (cache('zoho_token_expires_in') < now()) {
-            $this->refreshToken();
+        $zoho_user = DB::table('zohoauths')->whereUserId($user_id)->first();
+        if ($zoho_user->token_expires_in < now()) {
+            return $this->refreshToken($user_id);
         }
 
-        return cache('zoho_token');
+        return $zoho_user->token;
     }
 
-    public function refreshToken()
+    /**
+     * @param $user_id
+     * @return mixed
+     */
+    public function refreshToken($user_id)
     {
+        $zoho_user = DB::table('zohoauths')->whereUserId($user_id)->first();
+
         $data = [
-            'refresh_token' => cache('zoho_refresh_token'),
-            'client_id'     => config('zohobooks.client_id'),
-            'client_secret' => config('zohobooks.client_secret'),
-            'redirect_uri'  => config('zohobooks.redirect'),
+            'refresh_token' => $zoho_user->refresh_token,
+            'client_id'     => $zoho_user->client_id,
+            'client_secret' => $zoho_user->client_secret,
+            'redirect_uri'  => route('auth.zoho.callback'),
             'grant_type'    => 'refresh_token'
         ];
 
         $response = Http::asForm()->acceptJson()
             ->post(config('zohobooks.token_url'), $data);
 
-        cache(['zoho_token' => $response['access_token']]);
-        cache(['zoho_token_expires_in' => now()->addSeconds($response['expires_in'] - 10)]);
+        Zohoauth::where(['user_id' => $user_id])
+            ->update([
+                'token'            => $response['access_token'],
+                'token_expires_in' => now()->addSeconds($response['expires_in'] - 10),
+            ]);
+        return $response['access_token'];
     }
 
-    public function postQueued(string $url, array $data, array $headers = []): array
+    /**
+     * @param $user_id
+     * @param string $url
+     * @param array $data
+     * @param array $headers
+     * @return array
+     */
+    public function postQueued($user_id, string $url, array $data, array $headers = []): array
     {
-        ApiRequestJob::dispatch('post', $url, $data, $headers);
+        ApiRequestJob::dispatch($user_id, 'post', $url, $data, $headers);
 
         return [
             'status'  => true,
@@ -82,9 +116,16 @@ class Zohobooks
         ];
     }
 
-    public function patchQueued(string $url, array $data, array $headers = []): array
+    /**
+     * @param $user_id
+     * @param string $url
+     * @param array $data
+     * @param array $headers
+     * @return array
+     */
+    public function patchQueued($user_id, string $url, array $data, array $headers = []): array
     {
-        ApiRequestJob::dispatch('patch', $url, $data, $headers);
+        ApiRequestJob::dispatch($user_id, 'patch', $url, $data, $headers);
 
         return [
             'status'  => true,
@@ -92,11 +133,21 @@ class Zohobooks
         ];
     }
 
-    public function get(string $url, string $data_key, array $data = [], array $headers = []): array
+    /**
+     * @param $user_id
+     * @param string $url
+     * @param string $data_key
+     * @param array $data
+     * @param array $headers
+     * @return array
+     */
+    public function get($user_id, string $url, string $data_key, array $data = [], array $headers = []): array
     {
-        $access_token = $this->getAccessToken();
+        $access_token = $this->getAccessToken($user_id);
 
-        $data = $data + ['organization_id' => config('zohobooks.organization_id')];
+        $organization_id = Zohoauth::whereUserId($user_id)->first()->organization_id;
+
+        $data = $data + ['organization_id' => $organization_id];
 
         $response = Http::withHeaders(['Authorization' => 'Zoho-oauthtoken ' . $access_token] + $headers)
             ->get($url, $data);
@@ -104,26 +155,50 @@ class Zohobooks
         return $this->checkRequest($response, $data_key);
     }
 
-
-    public function post(string $url, string $data_key, array $data = [], array $headers = []): array
+    /**
+     * @param $user_id
+     * @param string $url
+     * @param string|null $data_key
+     * @param array $data
+     * @param array $headers
+     * @param bool $as_form
+     * @return array
+     */
+    public function post($user_id, string $url, string|null $data_key = null, array $data = [], array $headers = [], bool $as_form = false): array
     {
-        $access_token = $this->getAccessToken();
+        $access_token = $this->getAccessToken($user_id);
 
-        $data = $data + ['organization_id' => config('zohobooks.organization_id')];
+        $organization_id = Zohoauth::whereUserId($user_id)->first()->organization_id;
 
-        $response = Http::acceptJson()
-            ->withHeaders(['Authorization' => 'Zoho-oauthtoken ' . $access_token] + $headers)
-            ->post($url, $data);
+        $data = $data + ['organization_id' => $organization_id];
+
+
+        $response = $as_form
+            ? Http::acceptJson()->asForm()
+                ->withHeaders(['Authorization' => 'Zoho-oauthtoken ' . $access_token] + $headers)
+                ->post($url, $data)
+            : Http::acceptJson()
+                ->withHeaders(['Authorization' => 'Zoho-oauthtoken ' . $access_token] + $headers)
+                ->post($url, $data);
 
         return $this->checkRequest($response, $data_key);
     }
 
-
-    public function patch(string $url, string $data_key, array $data = [], array $headers = []): array
+    /**
+     * @param $user_id
+     * @param string $url
+     * @param string $data_key
+     * @param array $data
+     * @param array $headers
+     * @return array
+     */
+    public function patch($user_id, string $url, string $data_key, array $data = [], array $headers = []): array
     {
-        $access_token = $this->getAccessToken();
+        $access_token = $this->getAccessToken($user_id);
 
-        $data = $data + ['organization_id' => config('zohobooks.organization_id')];
+        $organization_id = Zohoauth::whereUserId($user_id)->first()->organization_id;
+
+        $data = $data + ['organization_id' => $organization_id];
 
         $response = Http::acceptJson()
             ->withHeaders(['Authorization' => 'Zoho-oauthtoken ' . $access_token] + $headers)
@@ -133,7 +208,12 @@ class Zohobooks
     }
 
 
-    public function checkRequest(Response $response, string $data_key = 'data'): array
+    /**
+     * @param Response $response
+     * @param string|null $data_key
+     * @return array
+     */
+    public function checkRequest(Response $response, string|null $data_key = null): array
     {
         if ($response->failed() || !isset($response['code']) || $response['code'] != 0) {
             return [
@@ -145,7 +225,7 @@ class Zohobooks
         return [
             'status'  => true,
             'message' => $response['message'],
-            'data'    => $response[$data_key]
+            'data'    => $response[$data_key] ?? null
         ];
     }
 }

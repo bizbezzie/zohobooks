@@ -15,7 +15,7 @@ class ZohobooksServiceProvider extends ServiceProvider
     {
         // $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'bizbezzie');
         // $this->loadViewsFrom(__DIR__.'/../resources/views', 'bizbezzie');
-        // $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
          $this->loadRoutesFrom(__DIR__.'/routes.php');
 
         // Publishing is only necessary when using the CLI.
@@ -71,7 +71,8 @@ class ZohobooksServiceProvider extends ServiceProvider
         // Publishing the configuration file.
         $this->publishes([
             __DIR__.'/../config/zohobooks.php' => config_path('zohobooks.php'),
-        ], 'zohobooks-config');
+            __DIR__.'/../migrations/create_zohoauths_table.php' => database_path('/migrations/'.date('Y_m_d_His').'_create_zohoauths_table.php'),
+        ], 'zohobooks');
 
         // Publishing the views.
         /*$this->publishes([

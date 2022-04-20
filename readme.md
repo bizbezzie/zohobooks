@@ -18,7 +18,7 @@ $ composer require bizbezzie/zohobooks
 1. install via composer ```composer require bizbezzie/zohobooks```
 
 
-2. Publish config file ```php artisan vendor:publish --tag=zohobooks-config```
+2. Publish config & migrations ```php artisan vendor:publish --tag=zohobooks```
 
 
 3. Go to [Zoho Developer Console](https://accounts.zoho.com/developerconsole) and generate **Server-based Client**. It
@@ -26,32 +26,19 @@ $ composer require bizbezzie/zohobooks
 
 ```
 Homepage URL: https://www.yourdomain.com
-Authorized Redirect URIs : https://www.yourdomain.com/auth/zoho/redirect
+Authorized Redirect URIs : https://www.yourdomain.com/auth/zoho/callback
 ```
 
-4. Add values of ```ZOHO_CLIENT_ID``` and ```ZOHO_CLIENT_SECRET``` also add value of ```ZOHO_REDIRECT_URI='/auth/zoho/callback'``` to your ```.env``` file. Zoho Redirect URL for
-   authentication will be added automatically in your routes.
+6. Add Client ID and Client Secret in Zohoauth Model
 ```
-.env
-
-ZOHO_CLIENT_ID=YourZohoClientIdHere
-ZOHO_CLIENT_SECRET=YourZohoClientSecretHere
-ZOHO_REDIRECT_URI='/auth/zoho/callback'
-```
-
-5.Add configuration to ```config/services.php```
-
-```
-config/services.php
-
-'zoho' => [    
-  'client_id' => env('ZOHO_CLIENT_ID'),  
-  'client_secret' => env('ZOHO_CLIENT_SECRET'),  
-  'redirect' => env('ZOHO_REDIRECT_URI') 
-],
+Zohoauth::create([
+'user_id => YourUserID
+'client_id' => YourClinetIdObtaindFromZohoInStep3
+'client_secret' => YourClinetSecretObtaindFromZohoInStep3
+])
 ```
 
-6. You can add ```ZOHOBOOKS_DATACENTER_BASE_API_URI``` and ```ZOHOBOOKS_DATACENTER_BASE_DOMAIN``` in your ```.env``` file if
+7. You can add ```ZOHOBOOKS_DATACENTER_BASE_API_URI``` and ```ZOHOBOOKS_DATACENTER_BASE_DOMAIN``` in your ```.env``` file if
    your Database center is other than India. Respective default value is ```'https://accounts.zoho.in/'``` and ```.in```
 
 | **Data Center**   | **Domain** | **Base API URI**              |
@@ -61,40 +48,9 @@ config/services.php
 | **India**         | .in        | https://accounts.zoho.in/     |
 | **Australia**     | .com.au    | https://accounts.zoho.com.au/ |
 
-7. As this application use ```laravel/socialite``` and ```socialiteproviders/zoho``` packages internally go through their documentation if needed.
 
-
-8. Add ```\SocialiteProviders\Manager\ServiceProvider::class``` to your ```providers[]``` array in ```config\app.php```.
-```
-config\app.php
-
-'providers' => [
-    \\ Other Providers
-    
-    \SocialiteProviders\Manager\ServiceProvider::class,
-];
-```
-
-9. Events $ Listeners
-   1. Add ```SocialiteProviders\Manager\SocialiteWasCalled``` event to your ```listen[]``` array in ```app/Providers/EventServiceProvider```.
-   2. Add listener ```[SocialiteProviders\Zoho\ZohoExtendSocialite::class, 'handle']``` to the ```SocialiteProviders\Manager\SocialiteWasCalled``` that you just created.
-```
-app/Providers/EventServiceProvider.php
-
-protected $listen = [
-    // Other Listeners
-    
-    \SocialiteProviders\Manager\SocialiteWasCalled::class => [
-            [\SocialiteProviders\Zoho\ZohoExtendSocialite::class, 'handle'],
-        ],
-];
-```
-
-10. Hit ```www.yourdomain.com/auth/zoho/first-token``` It will open Zoho Login Page. After login application will
-    remember zoho token in cache('zoho_token').
-    You can clear it via ```php artisan cache:clear``` or updating value of ```cache('zoho_token')```. This route will be disabled after
-    successful attempt.
-
+10. Hit ```www.yourdomain.com/auth/zoho/{user_id}/first-token``` It will open Zoho Login Page. After login application will
+    remember zoho token.
 
 ## Usage
 

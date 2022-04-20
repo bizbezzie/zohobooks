@@ -114,8 +114,7 @@ class Contact
     /**
      * Display the specified resource.
      */
-    public
-    function show($id)
+    public function show($id)
     {
         return ZohobooksAlias::get(config('zohobooks.domain') . 'contacts/' . $id, 'contact');
     }
@@ -123,8 +122,7 @@ class Contact
     /**
      * Update the specified resource in storage.
      */
-    public
-    function update()
+    public function update()
     {
         //
     }
@@ -132,9 +130,19 @@ class Contact
     /**
      * Remove the specified resource from storage.
      */
-    public
-    function destroy()
+    public function destroy()
     {
         //
     }
+
+    public function link($customer_id, $vendor_id)
+    {
+
+        $data = [
+            'vendor_id' => $vendor_id
+        ];
+
+        return ZohobooksAlias::post(config('zohobooks.domain') . 'customers/' . $customer_id. '/link', null, $data);
+    }
+
 }
