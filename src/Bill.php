@@ -4,14 +4,14 @@ namespace BizBezzie\ZohoBooks;
 
 use Bizbezzie\Zohobooks\Facades\Zohobooks as ZohobooksAlias;
 
-class Invoice
+class Bill
 {
     /**
      * Display a listing of the resource
      */
     public function index($user_id)
     {
-        return ZohobooksAlias::get($user_id, config('zohobooks.domain') . 'invoices', 'invoices');
+        return ZohobooksAlias::get($user_id, config('zohobooks.domain') . 'bills', 'bill');
     }
 
     /**
@@ -19,19 +19,23 @@ class Invoice
      */
     public function store(
         $user_id,
-        string $customer_id,
-        array  $line_items,
+        string $vendor_id,
+        string $bill_number,
+        array $line_items,
+        string $date = null,
         bool $is_queued = true
     )
     {
         $data = [
-            "customer_id" => $customer_id,
+            "vendor_id" => $vendor_id,
+            "bill_number"  => $bill_number,
             "line_items"  => $line_items,
+            "date"  => $date ?? now()->format('Y-m-d'),
         ];
 
         return $is_queued
-            ? ZohobooksAlias::postQueued($user_id, config('zohobooks.domain') . 'invoices', $data)
-            : ZohobooksAlias::post($user_id, config('zohobooks.domain') . 'invoices', 'invoice', $data);
+            ? ZohobooksAlias::postQueued($user_id, config('zohobooks.domain') . 'bills', $data)
+            : ZohobooksAlias::post($user_id, config('zohobooks.domain') . 'bills', 'bill', $data);
     }
 
     /**
@@ -40,7 +44,7 @@ class Invoice
     public
     function show($user_id, $id)
     {
-        return ZohobooksAlias::get($user_id, config('zohobooks.domain') . 'invoices/' . $id, 'invoice');
+        return ZohobooksAlias::get($user_id, config('zohobooks.domain') . 'bills/' . $id, 'bill');
     }
 
     /**

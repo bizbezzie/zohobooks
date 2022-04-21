@@ -10,15 +10,16 @@ class Contact
     /**
      * Display a listing of the resource
      */
-    public function index()
+    public function index($user_id)
     {
-        return ZohobooksAlias::get(config('zohobooks.domain') . 'contacts', 'contacts');
+        return ZohobooksAlias::get($user_id, config('zohobooks.domain') . 'contacts', 'contacts');
     }
 
     /**
      * Store a newly created resource in storage.
      */
     public function store(
+        $user_id,
         string $salutation,
         string $first_name,
         string $last_name,
@@ -108,15 +109,15 @@ class Contact
             "gst_treatment"          => $gst_treatment,
         ];
 
-        return ZohobooksAlias::post(config('zohobooks.domain') . 'contacts', 'contact', $data);
+        return ZohobooksAlias::post($user_id, config('zohobooks.domain') . 'contacts', 'contact', $data);
     }
 
     /**
      * Display the specified resource.
      */
-    public function show($id)
+    public function show($user_id, $id)
     {
-        return ZohobooksAlias::get(config('zohobooks.domain') . 'contacts/' . $id, 'contact');
+        return ZohobooksAlias::get($user_id, config('zohobooks.domain') . 'contacts/' . $id, 'contact');
     }
 
     /**
@@ -135,14 +136,14 @@ class Contact
         //
     }
 
-    public function link($customer_id, $vendor_id)
+    public function link($user_id, $customer_id, $vendor_id)
     {
 
         $data = [
             'vendor_id' => $vendor_id
         ];
 
-        return ZohobooksAlias::post(config('zohobooks.domain') . 'customers/' . $customer_id. '/link', null, $data);
+        return ZohobooksAlias::post($user_id, config('zohobooks.domain') . 'customers/' . $customer_id. '/link', null, $data);
     }
 
 }

@@ -46,8 +46,24 @@ class ZohobooksServiceProvider extends ServiceProvider
             return new Contact;
         });
 
+        $this->app->singleton('item', function () {
+            return new Item;
+        });
+
         $this->app->singleton('invoice', function () {
             return new Invoice;
+        });
+
+        $this->app->singleton('customerpayment', function () {
+            return new CustomerPayment;
+        });
+
+        $this->app->singleton('bill', function () {
+            return new Bill;
+        });
+
+        $this->app->singleton('vendorpayment', function () {
+            return new VendorPayment;
         });
     }
 
